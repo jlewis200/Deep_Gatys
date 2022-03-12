@@ -14,7 +14,7 @@ def main():
     model = models.vgg19(pretrained=True).to("cuda")
     print(model.features)
     
-    deepdream("content_images/clouds.jpeg", 36, model, "clouds_normed", learning_rate=1.5, num_iterations=2000)
+    deepdream("content_images/clouds.jpeg", 36, model, "clouds_normed", learning_rate=5, num_iterations=100)
     exit()
 
     for target_layer in range(len(model.features)):
@@ -46,12 +46,12 @@ def deprocess(img, should_rescale=True):
     return transform(img)
 
 
-def deepdream(src_img_filename, 
+def deepdream(base_img_filename, 
               target_layer, 
               model, 
               dst_img_filename, 
-              learning_rate=5,
-              num_iterations=100,
+              learning_rate=1.5,
+              num_iterations=10,
               max_jitter=32,
               n_octave=4,
               octave_scale=1.4,
@@ -80,13 +80,14 @@ def deepdream(src_img_filename,
     transform = transforms.Compose((convert, normalize, resize))
 
     #ensure tensor has 4 dimensions (N x C x H x W) and requires gradients
-    src_img = transform(Image.open(src_img_filename)).unsqueeze(0).cuda()
-    octaves = [src_img]
-
-
-    img_min = src_img.min()
-    img_max = src_img.max()
+    base_img = transform(Image.open(base_img_filename)).unsqueeze(0)
+    img_min = base_img.min()
+    img_max = base_img.max()
     blur = transforms.GaussianBlur((9, 9), sigma=(0.2, 0.2))
+
+    
+    #interact(local=locals())
+    
 
     #register forward hook to extract layer activations
     #adapted from:  https://discuss.pytorch.org/t/how-can-i-extract-intermediate-layer-output-from-loaded-cnn-model/77301
@@ -98,43 +99,59 @@ def deepdream(src_img_filename,
         return hook
     
     model.features[target_layer].register_forward_hook(get_activation(target_layer))
-
+    
+    #place model in eval mode
     model.eval()
 
-    for t in range(num_iterations):
-        #apply jitter
-        x_jitter = random.randint(0, max_jitter)
-        y_jitter = random.randint(0, max_jitter)
-        img = img.roll(shifts=(y_jitter, x_jitter), dims=(2, 3))
+    octaves = [torch.tensor(nd.zoom(base_img, (1, 1, (1 / octave_scale)**idx, (1 / octave_scale)**idx))).cuda() for idx in range(n_octave)]
 
-        img_var = img.clone().detach().requires_grad_(True)
+    detail = torch.zeros_like(octaves[-1])
 
-        model.forward(img_var)
-        model.zero_grad()
-        #activations[target_layer].sum().backward()
-        loss = torch.linalg.norm(activations[target_layer])
-        loss.backward()
+    for octave, octave_base in enumerate(octaves[::-1]):
+        h, w = octave_base.shape[-2:]
 
-        #normalization
-        g = img_var.grad
-        g /= torch.linalg.norm(g)
-        
-        img = img + (learning_rate * g)
+        if octave > 0:
+            h1, w1 = detail.shape[-2:]
+            detail = torch.tensor(nd.zoom(detail.cpu(), (1, 1, 1.0*h/h1, 1.0*w/w1), order=1)).cuda()        
+    
+        img = octave_base + detail
 
-        #clamp min and max values
-        img = img.clamp(img_min, img_max)
-        interact(local=locals())
+        for t in range(num_iterations):
+            #apply jitter
+            x_jitter = random.randint(0, max_jitter)
+            y_jitter = random.randint(0, max_jitter)
+            img = img.roll(shifts=(y_jitter, x_jitter), dims=(2, 3))
+
+            img_var = img.clone().detach().requires_grad_(True)
+
+            model.forward(img_var)
+            model.zero_grad()
+            #activations[target_layer].sum().backward()
+            loss = torch.linalg.norm(activations[target_layer])
+            loss.backward()
+
+            #normalization
+            g = img_var.grad
+            g /= torch.linalg.norm(g)
+            
+            img = img + (learning_rate * g)
+
+            #clamp min and max values
+            img = img.clamp(img_min, img_max)
 
 
-#        if (t + 1) % 10 == 0:
-#            img = blur(img)
+    #        if (t + 1) % 10 == 0:
+    #            img = blur(img)
 
-        #de-jitter
-        img = img.roll(shifts=(-y_jitter, -x_jitter), dims=(2, 3))
+            #de-jitter
+            img = img.roll(shifts=(-y_jitter, -x_jitter), dims=(2, 3))
+
+        detail = img - octave_base
 
         # Periodically show the image
         if generate_plots:
-            if t == 0 or (t + 1) % show_every == 0 or t == num_iterations - 1:
+            #if t == 0 or (t + 1) % show_every == 0 or t == num_iterations - 1:
+            if True:
                 plt.imshow(deprocess(img.clone().cpu()))
                 plt.title('%s_layer_%d_iter_%d' % (dst_img_filename, target_layer, t+1))
                 plt.gcf().set_size_inches(12, 12)
