@@ -14,7 +14,15 @@ def main():
     model = models.vgg19(pretrained=True).to("cuda")
     print(model.features)
     
-    deepdream("content_images/clouds.jpeg", 36, model, "clouds_normed", learning_rate=5, num_iterations=100)
+    #deepdream("content_images/clouds.jpeg", 36, model, "clouds_normed", learning_rate=5, num_iterations=200, octave_scale=1.4, n_octave=6)
+    #deepdream("content_images/beksinski_1.jpg", 36, model, "beksinski_1", learning_rate=5, num_iterations=100)
+    #deepdream("content_images/beksinski_2.jpg", 36, model, "beksinski_2", learning_rate=5, num_iterations=100)
+    #deepdream("content_images/beksinski_3.jpg", 36, model, "beksinski_3", learning_rate=5, num_iterations=100, octave_scale=1.2, n_octave=10)
+    deepdream("content_images/beksinski_4.jpg", 36, model, "beksinski_4", learning_rate=5, num_iterations=200, octave_scale=1.1, n_octave=14)
+    #deepdream("content_images/beksinski_5.jpg", 36, model, "beksinski_5", learning_rate=5, num_iterations=50, octave_scale=1.4, n_octave=4)
+    #deepdream("content_images/beksinski_6.jpg", 36, model, "beksinski_6", learning_rate=5, num_iterations=50, octave_scale=1.4, n_octave=10)
+    #deepdream("content_images/waterfall.jpg", 36, model, "waterfall", learning_rate=5, num_iterations=50, octave_scale=1.4, n_octave=10)
+    #deepdream("content_images/4k_skull.jpg", 36, model, "4k_skull", learning_rate=5, num_iterations=100, octave_scale=1.1, n_octave=16)
     exit()
 
     for target_layer in range(len(model.features)):
@@ -77,10 +85,12 @@ def deepdream(base_img_filename,
     convert   = transforms.ToTensor()
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     resize    = transforms.Resize(img_size)
-    transform = transforms.Compose((convert, normalize, resize))
+    #transform = transforms.Compose((convert, normalize, resize))
+    transform = transforms.Compose((convert, normalize))
 
     #ensure tensor has 4 dimensions (N x C x H x W) and requires gradients
     base_img = transform(Image.open(base_img_filename)).unsqueeze(0)
+
     img_min = base_img.min()
     img_max = base_img.max()
     blur = transforms.GaussianBlur((9, 9), sigma=(0.2, 0.2))
@@ -126,8 +136,8 @@ def deepdream(base_img_filename,
 
             model.forward(img_var)
             model.zero_grad()
-            #activations[target_layer].sum().backward()
-            loss = torch.linalg.norm(activations[target_layer])
+            loss = activations[target_layer].sum()
+            #loss = torch.linalg.norm(activations[target_layer])
             loss.backward()
 
             #normalization
@@ -152,11 +162,7 @@ def deepdream(base_img_filename,
         if generate_plots:
             #if t == 0 or (t + 1) % show_every == 0 or t == num_iterations - 1:
             if True:
-                plt.imshow(deprocess(img.clone().cpu()))
-                plt.title('%s_layer_%d_iter_%d' % (dst_img_filename, target_layer, t+1))
-                plt.gcf().set_size_inches(12, 12)
-                plt.axis('off')
-                plt.savefig('visualization/%s_layer_%d_iter_%d' % (dst_img_filename, target_layer, t+1), bbox_inches = 'tight')
+                deprocess(img.clone().cpu()).save("visualization/%s_layer_%d_iter_%d.png" % (dst_img_filename, target_layer, t+1))
 
 if __name__ == "__main__":
     main()
