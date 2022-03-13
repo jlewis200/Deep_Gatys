@@ -18,7 +18,7 @@ def main():
     #deepdream("content_images/beksinski_1.jpg", 36, model, "beksinski_1", learning_rate=5, num_iterations=100)
     #deepdream("content_images/beksinski_2.jpg", 36, model, "beksinski_2", learning_rate=5, num_iterations=100)
     #deepdream("content_images/beksinski_3.jpg", 36, model, "beksinski_3", learning_rate=5, num_iterations=100, octave_scale=1.2, n_octave=10)
-    deepdream("content_images/beksinski_4.jpg", 36, model, "beksinski_4", learning_rate=5, num_iterations=200, octave_scale=1.1, n_octave=14)
+    deepdream("content_images/beksinski_4.jpg", 36, model, "beksinski_4", learning_rate=5, num_iterations=120, octave_scale=1.4, n_octave=9)
     #deepdream("content_images/beksinski_5.jpg", 36, model, "beksinski_5", learning_rate=5, num_iterations=50, octave_scale=1.4, n_octave=4)
     #deepdream("content_images/beksinski_6.jpg", 36, model, "beksinski_6", learning_rate=5, num_iterations=50, octave_scale=1.4, n_octave=10)
     #deepdream("content_images/waterfall.jpg", 36, model, "waterfall", learning_rate=5, num_iterations=50, octave_scale=1.4, n_octave=10)
@@ -134,10 +134,13 @@ def deepdream(base_img_filename,
 
             img_var = img.clone().detach().requires_grad_(True)
 
-            model.forward(img_var)
-            model.zero_grad()
-            loss = activations[target_layer].sum()
+            #loss = model.forward(img_var).sum()
+            #loss = activations[target_layer].sum()
             #loss = torch.linalg.norm(activations[target_layer])
+            loss = model.forward(img_var)
+            loss = loss[0, 248].sum()
+            #interact(local=locals())
+            model.zero_grad()
             loss.backward()
 
             #normalization
