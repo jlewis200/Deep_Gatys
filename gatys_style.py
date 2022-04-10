@@ -22,66 +22,9 @@ STD  = torch.tensor([0.229, 0.224, 0.225])
 def main():
     model = models.vgg19_bn(pretrained=True).to("cuda")
     """
-    VGG(
-      (features): Sequential(
-        (0): Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-    1_1 (1): ReLU(inplace=True)
-        (2): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        (3): ReLU(inplace=True)
-        (4): AvgPool2d(kernel_size=2, stride=2, padding=0)
-
-        (5): Conv2d(64, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-    2_1 (6): ReLU(inplace=True)
-        (7): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        (8): ReLU(inplace=True)
-        (9): AvgPool2d(kernel_size=2, stride=2, padding=0)
-
-        (10): Conv2d(128, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-    3_1 (11): ReLU(inplace=True)
-        (12): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        (13): ReLU(inplace=True)
-        (14): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        (15): ReLU(inplace=True)
-        (16): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        (17): ReLU(inplace=True)
-        (18): AvgPool2d(kernel_size=2, stride=2, padding=0)
-
-        (19): Conv2d(256, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-    4_1 (20): ReLU(inplace=True)
-        (21): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-    4_2 (22): ReLU(inplace=True)
-        (23): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        (24): ReLU(inplace=True)
-        (25): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        (26): ReLU(inplace=True)
-        (27): AvgPool2d(kernel_size=2, stride=2, padding=0)
-
-        (28): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-    5_1 (29): ReLU(inplace=True)
-        (30): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        (31): ReLU(inplace=True)
-        (32): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        (33): ReLU(inplace=True)
-        (34): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        (35): ReLU(inplace=True)
-        (36): AvgPool2d(kernel_size=2, stride=2, padding=0)
-      )
-      (avgpool): AdaptiveAvgPool2d(output_size=(7, 7))
-      (classifier): Sequential(
-        (0): Linear(in_features=25088, out_features=4096, bias=True)
-        (1): ReLU(inplace=True)
-        (2): Dropout(p=0.5, inplace=False)
-        (3): Linear(in_features=4096, out_features=4096, bias=True)
-        (4): ReLU(inplace=True)
-        (5): Dropout(p=0.5, inplace=False)
-        (6): Linear(in_features=4096, out_features=1000, bias=True)
-      )
-    )
     """
-    #style_layers = [model.features[idx] for idx in [1, 6, 11, 20, 29]]
-    #style_layers = [model.features[idx] for idx in [0, 5, 10, 19, 28]]
+
     style_layers = [model.features[idx] for idx in [0, 7, 14, 27, 40]]
-    #content_layer = model.features[21]
     content_layer = model.features[30]
     
     #replace maxpooling layers with avgpool as per Gatys et al.
@@ -96,11 +39,11 @@ def main():
     print(model)
     transfer_style("content_images/cat.jpg", 
                    "style_images/painting3.jpg",
-                   "stylized_images/cat_painting3n",
+                   "stylized_images/cat_painting3",
                    model,
                    content_layer,
                    style_layers,
-                   0.0000001,
+                   0.00000006,
                    lr=0.1,
                    n_iters=2001)
 
@@ -166,9 +109,10 @@ def transfer_style(content_filename,  #content image filename
     style_img = interpolate(style_img, size=content_img.shape[-2:], align_corners=True, mode="bilinear").cuda()        
    
     #generate randomly initialized base image
-    #generated_img = preprocess(torch.rand(content_img.shape)).cuda()
-    #generated_img = torch.rand(content_img.shape).cuda()
+    #passing the random noise through the preprocessing function is important for good results
+    #the normalization prevents several failure modes
     generated_img = preprocess(transforms.ToPILImage()(torch.rand(content_img.shape[1:]))).unsqueeze(0).cuda()
+    #generated_img = 0.9 * generated_img + 0.1 * content_img
 
     #per channel clamping values, shape:  (1, 3, 1, 1)
     mins = (-MEAN / STD).unsqueeze(0).unsqueeze(-1).unsqueeze(-1).cuda()
