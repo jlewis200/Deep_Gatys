@@ -33,13 +33,14 @@ def main():
 
     transfer_style("content_images/cat.jpg", 
                    "style_images/swirl2.jpg",
-                   "stylized_images/cat_swirl2",
+                   "stylized_images/cat_swirl2_deep",
                    model,
                    content_layer,
                    style_layers,
                    1e-11,
                    lr=0.1,
-                   n_iters=1001)
+                   n_iters=41,
+                   n_octave=4)
 
 
 def transfer_style(content_filename,  #content image filename
@@ -50,7 +51,11 @@ def transfer_style(content_filename,  #content image filename
                    style_layers,      #the style layers of the model
                    alpha,             #relative weight of content loss.  style loss weight = 1 - alphaa
                    lr=0.1,            #learning rate
-                   n_iters=1000):     #number of gradient ascent steps per octave
+                   n_iters=1001,      #number of gradient ascent steps per octave
+                   n_octave=4,        #number of times to process downsampled images
+                   octave_scale=1.4,  #scale factor for each octave
+                   detail_decay=1
+     
 
     #expand tensor has 4 dimensions (N x C x H x W)
     content_img = preprocess(Image.open(content_filename)).cuda()
@@ -74,46 +79,68 @@ def transfer_style(content_filename,  #content image filename
     #place model in eval mode
     model.eval()
 
-    #get content layer activations for content image
-    model.forward(content_img)
-    content_activation = activations[content_layer]
+    #generate zoomed-out/lower-res images, content_octaves[0]:  original resolution, content_octaves[-1]:  lowest resolution
+    content_octaves = [interpolate(content_img, scale_factor=1/octave_scale**idx, recompute_scale_factor=False, align_corners=True, mode="bilinear") for idx in range(n_octave)]
+    style_octaves = [interpolate(style_img, scale_factor=1/octave_scale**idx, recompute_scale_factor=False, align_corners=True, mode="bilinear") for idx in range(n_octave)]
 
-    #get style layer gram matrices for style image
-    model.forward(style_img)
-    style_grams = [gram_matrix(activations[style_layer]) for style_layer in style_layers]
+    #detail tensor accumulates the changes made to the image during the iterative gradient ascent
+    detail = torch.zeros_like(content_octaves[-1]).cuda()
+
+    #iterate through images from lowest to highest resolution
+    for content_octave, style_octave in zip(content_octaves[::-1], style_octaves[::-1]):
+
+        #upsample lower-res detail of previous iteration to shape of current octave
+        detail = interpolate(detail, size=content_octave.shape[-2:], align_corners=True, mode="bilinear")        
    
-    #create backprop-able image
-    img = content_img.clone().detach().requires_grad_(True).cuda()
-    optimizer = torch.optim.Adam([img], betas=(0.9, 0.999), weight_decay=0, lr=lr)
-
-    #perform iterative gradient descent for current octave
-    for idx in range(n_iters):
         
-        if idx in (600, 1000, 1400, 2000):
-            lr = lr*0.5
-            optimizer.lr = lr
+        #get content layer activations for content image
+        model.forward(content_octave)
+        content_activation = activations[content_layer]
 
-        #backprop to the image
-        model.zero_grad()
-        optimizer.zero_grad()
+        #get style layer gram matrices for style image
+        model.forward(style_octave)
+        style_grams = [gram_matrix(activations[style_layer]) for style_layer in style_layers]
+       
+        #add previously accrued detail to the (possibly downsampled) base img
+        img = (content_octave.clone().detach() + detail_decay * detail.clone().detach()).detach().requires_grad_(True).cuda()
+        optimizer = torch.optim.Adam([img], betas=(0.9, 0.999), weight_decay=0, lr=lr)
 
-        #make forward pass and set objective function
-        model.forward(img)
+        #perform iterative gradient descent for current content_octave
+        for idx in range(n_iters):
+            
+            if idx in (600, 1000, 1400, 2000):
+                lr = lr*0.5
+                optimizer.lr = lr
 
-        style_activations = [activations[style_layer] for style_layer in style_layers]
-        s_loss = style_loss(style_activations, style_grams)
-        c_loss = alpha * content_loss(activations[content_layer], content_activation)
+            #backprop to the image
+            model.zero_grad()
+            optimizer.zero_grad()
 
-        loss = c_loss + s_loss
+            #make forward pass and set objective function
+            model.forward(img)
 
-        loss.backward()
-        optimizer.step()
-   
-        print("iter:  %d, %f %f" %(idx, c_loss, s_loss))
+            style_activations = [activations[style_layer] for style_layer in style_layers]
+            s_loss = style_loss(style_activations, style_grams)
+            c_loss = alpha * content_loss(activations[content_layer], content_activation)
 
-        #save the image periodically
-        if idx  % 100 == 0:
-            deprocess(img.clone().cpu()).save("%s_%d.jpg" % (out_filename, idx))
+            loss = c_loss + s_loss
+
+            loss.backward()
+            optimizer.step()
+       
+            print("iter:  %d, %f %f" %(idx, c_loss, s_loss))
+
+            #save the image periodically
+            if idx  % 100 == 0:
+                deprocess(img.clone().cpu()).save("%s_%d.jpg" % (out_filename, idx))
+
+        #separate accrued detail from the (possibly downsampled) base image
+        detail = img - content_octave
+
+        #save the image on each octave
+        deprocess(img.squeeze(0).clone().cpu()).save("%s_octave.png" % out_filename)
+
+
 
 def preprocess(img):
     convert   = transforms.ToTensor()
