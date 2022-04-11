@@ -9,6 +9,7 @@ import random
 from torchvision import models, transforms
 from torch.nn.functional import interpolate
 from PIL import Image
+from os import system
 from code import interact
 
 #normalization constants from:  https://pytorch.org/vision/stable/models.html
@@ -16,14 +17,17 @@ MEAN = torch.tensor([0.485, 0.456, 0.406])
 STD  = torch.tensor([0.229, 0.224, 0.225])
 
 def main():
+    ####################################################################################################################
+    #  *****update model name when swapping models to ensure image meta data is acccurate*****
     model = models.vgg19(pretrained=True).to("cuda")
+    model.name="torchvision.models.vgg19"
+    ####################################################################################################################
+
     style_layers = [model.features[idx] for idx in [1, 6, 11, 20, 29]]
     content_layer = model.features[22]
     
     #replace maxpooling layers with avgpool as per Gatys et al.
     for idx in range(len(model.features)):
-    
-        #interact(local=locals())
         if isinstance(model.features[idx], torch.nn.modules.pooling.MaxPool2d):
             maxpool = model.features[idx]
             model.features[idx] = torch.nn.AvgPool2d(kernel_size=maxpool.kernel_size,
@@ -32,15 +36,16 @@ def main():
                                                      ceil_mode=maxpool.ceil_mode)
 
     transfer_style("content_images/cat.jpg", 
-                   "style_images/swirl2.jpg",
-                   "stylized_images/cat_swirl2_deep",
+                   "style_images/painting3.jpg",
+                   "stylized_images/cat_bricks_deep",
                    model,
                    content_layer,
                    style_layers,
                    1e-11,
-                   lr=0.1,
-                   n_iters=41,
-                   n_octave=4)
+                   lr=0.15,
+                   n_iters=100,
+                   n_octave=4,
+                   detail_decay=1)
 
 
 def transfer_style(content_filename,  #content image filename
@@ -49,12 +54,12 @@ def transfer_style(content_filename,  #content image filename
                    model,             #the pretrained CNN that will be used to generate the image
                    content_layer,     #the content layer of the model
                    style_layers,      #the style layers of the model
-                   alpha,             #relative weight of content loss.  style loss weight = 1 - alphaa
+                   alpha=1e-11,             #relative weight of content loss.  style loss weight = 1 - alphaa
                    lr=0.1,            #learning rate
                    n_iters=1001,      #number of gradient ascent steps per octave
                    n_octave=4,        #number of times to process downsampled images
                    octave_scale=1.4,  #scale factor for each octave
-                   detail_decay=1
+                   detail_decay=1):   #scaler for previous octave's detail
      
 
     #expand tensor has 4 dimensions (N x C x H x W)
@@ -133,12 +138,17 @@ def transfer_style(content_filename,  #content image filename
             #save the image periodically
             if idx  % 100 == 0:
                 deprocess(img.clone().cpu()).save("%s_%d.jpg" % (out_filename, idx))
+                hyperparameters = "deep_gatys_style, content_filename=%s, style_filename=%s, model=%s, alpha=%s, lr=%s, n_iters=%d, n_octave=%d, octave_scale=%s, detail_decay=%s, iter=%d" % (content_filename, style_filename, model.name, str(alpha), lr, n_iters, n_octave, octave_scale, detail_decay, idx)
+                system("exiftool -ImageDescription='%s' '%s_%d.jpg'" % (hyperparameters, out_filename, idx)) 
 
         #separate accrued detail from the (possibly downsampled) base image
         detail = img - content_octave
 
         #save the image on each octave
-        deprocess(img.squeeze(0).clone().cpu()).save("%s_octave.png" % out_filename)
+        deprocess(img.squeeze(0).clone().cpu()).save("%s.jpg" % out_filename)
+        hyperparameters = "deep_gatys_style, content_filename=%s, style_filename=%s, model=%s, alpha=%s, lr=%s, n_iters=%d, n_octave=%d, octave_scale=%s, detail_decay=%s, iter=%d" % (content_filename, style_filename, model.name, str(alpha), lr, n_iters, n_octave, octave_scale, detail_decay, idx)
+        system("exiftool -ImageDescription='%s' '%s.jpg'" % (hyperparameters, out_filename)) 
+
 
 
 
