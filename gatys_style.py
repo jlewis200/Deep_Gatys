@@ -83,15 +83,15 @@ def main():
                                                      ceil_mode=maxpool.ceil_mode)
 
     print(model)
-    transfer_style("content_images/tuebingen.jpg", 
-                   "style_images/starry_night.jpg",
-                   "stylized_images/tuebingen_starry_night",
+    transfer_style("content_images/cat.jpg", 
+                   "style_images/painting3.jpg",
+                   "stylized_images/painting3a",
                    model,
                    content_layer,
                    style_layers,
                    10**-11,
                    lr=0.1,
-                   n_iters=1001)
+                   n_iters=3001)
 
 
 def transfer_style(content_filename,  #content image filename
@@ -113,8 +113,8 @@ def transfer_style(content_filename,  #content image filename
     #generate randomly initialized base image
     #passing the random noise through the preprocessing function is important for good results
     #the normalization prevents several failure modes
-    generated_img = preprocess(transforms.ToPILImage()(torch.rand(content_img.shape[1:]))).unsqueeze(0).cuda()
-    #generated_img = 0.9 * generated_img + 0.1 * content_img
+    #generated_img = preprocess(transforms.ToPILImage()(torch.rand(content_img.shape[1:]))).unsqueeze(0).cuda()
+    #generated_img = 0.5 * generated_img + 0.5 * content_img
     generated_img = content_img
 
     #per channel clamping values, shape:  (1, 3, 1, 1)
@@ -154,7 +154,7 @@ def transfer_style(content_filename,  #content image filename
     #perform iterative gradient ascent for current octave
     for idx in range(n_iters):
         
-        if idx in (600, 1000, 1400):
+        if idx in (600, 1000, 1400, 2000):
             lr = lr*0.5
         optimizer = torch.optim.Adam([img], lr=lr)
 
