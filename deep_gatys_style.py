@@ -28,25 +28,26 @@ def main():
     
     #replace maxpooling layers with avgpool as per Gatys et al.
     for idx in range(len(model.features)):
+        model.features[idx].requires_grad_(False)
         if isinstance(model.features[idx], torch.nn.modules.pooling.MaxPool2d):
             maxpool = model.features[idx]
             model.features[idx] = torch.nn.AvgPool2d(kernel_size=maxpool.kernel_size,
                                                      stride=maxpool.stride,
                                                      padding=maxpool.padding,
                                                      ceil_mode=maxpool.ceil_mode)
-    content_filename = "cat"
-    style_filename = "swirl"
+    content_filename = "dale1"
+    style_filename = "swirl2"
     transfer_style("content/%s.jpg" % content_filename, 
                    "style/%s.jpg" % style_filename,
-                   "stylized/deep_gatys/%s_%s" % (content_filename, style_filename),
+                   "stylized/deep_gatys/upscaled_%s_%s" % (content_filename, style_filename),
                    model,
                    content_layer,
                    style_layers,
-                   1e-9,
-                   lr=0.1,
-                   n_iters=20,
+                   1e-11,
+                   lr=0.04,
+                   n_iters=10,
                    n_octave=4,
-                   detail_decay=1)
+                   detail_decay=0.99)
 
 
 def transfer_style(content_filename,  #content image filename
@@ -87,7 +88,11 @@ def transfer_style(content_filename,  #content image filename
 
     #generate zoomed-out/lower-res images, content_octaves[0]:  original resolution, content_octaves[-1]:  lowest resolution
     content_octaves = [interpolate(content_img, scale_factor=1/octave_scale**idx, recompute_scale_factor=False, align_corners=True, mode="bilinear") for idx in range(n_octave)]
+    content_octaves.insert(0, interpolate(content_img, scale_factor=1.225, recompute_scale_factor=False, align_corners=True, mode="bilinear"))
+    content_octaves.insert(0, interpolate(content_img, scale_factor=1.5, recompute_scale_factor=False, align_corners=True, mode="bilinear"))
     style_octaves = [interpolate(style_img, scale_factor=1/octave_scale**idx, recompute_scale_factor=False, align_corners=True, mode="bilinear") for idx in range(n_octave)]
+    style_octaves.insert(0, interpolate(style_img, scale_factor=1.225, recompute_scale_factor=False, align_corners=True, mode="bilinear"))
+    style_octaves.insert(0, interpolate(style_img, scale_factor=1.5, recompute_scale_factor=False, align_corners=True, mode="bilinear"))
 
     #detail tensor accumulates the changes made to the image during the iterative gradient ascent
     detail = torch.zeros_like(content_octaves[-1]).cuda()
@@ -128,13 +133,15 @@ def transfer_style(content_filename,  #content image filename
             style_activations = [activations[style_layer] for style_layer in style_layers]
             s_loss = style_loss(style_activations, style_grams)
             c_loss = alpha * content_loss(activations[content_layer], content_activation)
+            #t_loss = 0 * 1e-8 * tv_loss(img)
+            t_loss = 0 
 
-            loss = c_loss + s_loss
+            loss = c_loss + s_loss + t_loss
 
             loss.backward()
             optimizer.step()
        
-            print("iter:  %d, %f %f" %(idx, c_loss, s_loss))
+            print("iter:  %d, %f %f %f" %(idx, c_loss, s_loss, t_loss))
 
             #save the image periodically
             if idx  % 100 == 0:
@@ -168,6 +175,17 @@ def deprocess(img):
     convert     = transforms.ToPILImage()
     transform   = transforms.Compose((squeeze, normalize_0, normalize_1, clamp, convert))
     return transform(img)
+
+def tv_loss(generated_activations):
+    loss = torch.zeros(1, dtype=torch.float32, requires_grad=True).cuda()
+
+    #form a flattened vector containing all rows except final and from that subtract a flattened vector containing all rows except first (across all channels)
+    loss = loss + (generated_activations[0, :, 1:].flatten() - generated_activations[0, :, :-1].flatten()).square().sum()
+
+    #form a flattened vector containing all cols except final and from that subtract a flattened vector containing all cols except first (across all channels)
+    loss = loss + (generated_activations[0, :, :, 1:].flatten() - generated_activations[0, :, :, :-1].flatten()).square().sum()
+    
+    return loss    
 
 def style_loss(generated_activations, style_grams):
     loss = torch.zeros(1, dtype=torch.float32, requires_grad=True).cuda()
