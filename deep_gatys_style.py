@@ -9,12 +9,18 @@ import random
 from torchvision import models, transforms
 from torch.nn.functional import interpolate
 from PIL import Image
+from time import time
 from os import system
 from code import interact
 
 #normalization constants from:  https://pytorch.org/vision/stable/models.html
 MEAN = torch.tensor([0.485, 0.456, 0.406])
 STD  = torch.tensor([0.229, 0.224, 0.225])
+
+#per channel clamping values based on MEAN & STD, shape:  (1, 3, 1, 1)
+MINS = (-MEAN / STD).unsqueeze(0).unsqueeze(-1).unsqueeze(-1).cuda()
+MAXS = ((1 - MEAN) / STD).unsqueeze(0).unsqueeze(-1).unsqueeze(-1).cuda()
+
 
 def main():
     ####################################################################################################################
@@ -35,19 +41,30 @@ def main():
                                                      stride=maxpool.stride,
                                                      padding=maxpool.padding,
                                                      ceil_mode=maxpool.ceil_mode)
-    content_filename = "dale1"
-    style_filename = "swirl2"
-    transfer_style("content/%s.jpg" % content_filename, 
-                   "style/%s.jpg" % style_filename,
-                   "stylized/deep_gatys/upscaled_%s_%s" % (content_filename, style_filename),
-                   model,
-                   content_layer,
-                   style_layers,
-                   1e-11,
-                   lr=0.04,
-                   n_iters=10,
-                   n_octave=4,
-                   detail_decay=0.99)
+    
+    for content_filename in [str(idx) for idx in range(1, 13)]:
+        for style_filename in [str(idx) for idx in range(1, 10)]:
+            for alpha in [1e-11, 1e-10, 1e-9, 1e-8, 1e-7]:
+                for beta in [0, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5]:
+                    for gamma in [0, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5]:
+                        for n_iters in [5, 10, 20, 40]:
+                            for n_octave in [1, 2, 3, 4, 5, 6]:
+                                for octave_scale in [1.2, 1.4, 1.6]:
+                                    for detail_decay in [1.0, 0.9, 0.8, 0.7]:
+                                        transfer_style("content/%s.jpg" % content_filename, 
+                                                       "style/%s.jpg" % style_filename,
+                                                       "stylized/deep_gatys/%s_%s" % (content_filename, style_filename),
+                                                       model,
+                                                       content_layer,
+                                                       style_layers,
+                                                       alpha = alpha,
+                                                       beta  = beta,
+                                                       gamma = gamma,
+                                                       lr=0.1,
+                                                       n_iters=n_iters,
+                                                       n_octave=n_octave,
+                                                       octave_scale=octave_scale,
+                                                       detail_decay=detail_decay)
 
 
 def transfer_style(content_filename,  #content image filename
@@ -56,7 +73,9 @@ def transfer_style(content_filename,  #content image filename
                    model,             #the pretrained CNN that will be used to generate the image
                    content_layer,     #the content layer of the model
                    style_layers,      #the style layers of the model
-                   alpha=1e-11,             #relative weight of content loss.  style loss weight = 1 - alphaa
+                   alpha=1e-11,       #weight of content loss
+                   beta=0,        #weight of tv loss
+                   gamma=0,       #weight of clipping loss
                    lr=0.1,            #learning rate
                    n_iters=1001,      #number of gradient ascent steps per octave
                    n_octave=4,        #number of times to process downsampled images
@@ -88,11 +107,7 @@ def transfer_style(content_filename,  #content image filename
 
     #generate zoomed-out/lower-res images, content_octaves[0]:  original resolution, content_octaves[-1]:  lowest resolution
     content_octaves = [interpolate(content_img, scale_factor=1/octave_scale**idx, recompute_scale_factor=False, align_corners=True, mode="bilinear") for idx in range(n_octave)]
-    content_octaves.insert(0, interpolate(content_img, scale_factor=1.225, recompute_scale_factor=False, align_corners=True, mode="bilinear"))
-    content_octaves.insert(0, interpolate(content_img, scale_factor=1.5, recompute_scale_factor=False, align_corners=True, mode="bilinear"))
     style_octaves = [interpolate(style_img, scale_factor=1/octave_scale**idx, recompute_scale_factor=False, align_corners=True, mode="bilinear") for idx in range(n_octave)]
-    style_octaves.insert(0, interpolate(style_img, scale_factor=1.225, recompute_scale_factor=False, align_corners=True, mode="bilinear"))
-    style_octaves.insert(0, interpolate(style_img, scale_factor=1.5, recompute_scale_factor=False, align_corners=True, mode="bilinear"))
 
     #detail tensor accumulates the changes made to the image during the iterative gradient ascent
     detail = torch.zeros_like(content_octaves[-1]).cuda()
@@ -119,10 +134,6 @@ def transfer_style(content_filename,  #content image filename
         #perform iterative gradient descent for current content_octave
         for idx in range(n_iters):
             
-            if idx in (600, 1000, 1400, 2000):
-                lr = lr*0.5
-                optimizer.lr = lr
-
             #backprop to the image
             model.zero_grad()
             optimizer.zero_grad()
@@ -131,34 +142,32 @@ def transfer_style(content_filename,  #content image filename
             model.forward(img)
 
             style_activations = [activations[style_layer] for style_layer in style_layers]
-            s_loss = style_loss(style_activations, style_grams)
-            c_loss = alpha * content_loss(activations[content_layer], content_activation)
-            #t_loss = 0 * 1e-8 * tv_loss(img)
-            t_loss = 0 
-
-            loss = c_loss + s_loss + t_loss
+            l_style    = style_loss(style_activations, style_grams)
+            l_content  = alpha * content_loss(activations[content_layer], content_activation)
+            l_tv       = beta * tv_loss(img)
+            l_clipping = gamma * clipping_loss(img)
+            loss = l_content + l_style + l_tv + l_clipping
 
             loss.backward()
             optimizer.step()
        
-            print("iter:  %d, %f %f %f" %(idx, c_loss, s_loss, t_loss))
+            print("iter:  %d, %f %f %f %f" %(idx, l_content, l_style, l_tv, l_clipping))
 
-            #save the image periodically
-            if idx  % 100 == 0:
-                deprocess(img.clone().cpu()).save("%s_%d.jpg" % (out_filename, idx))
-                hyperparameters = "deep_gatys_style, content_filename=%s, style_filename=%s, model=%s, alpha=%s, lr=%s, n_iters=%d, n_octave=%d, octave_scale=%s, detail_decay=%s, iter=%d" % (content_filename, style_filename, model.name, str(alpha), lr, n_iters, n_octave, octave_scale, detail_decay, idx)
-                system("exiftool -overwrite_original -ImageDescription='%s' '%s_%d.jpg'" % (hyperparameters, out_filename, idx)) 
+#            #save the image periodically
+#            if idx  % 100 == 0:
+#                deprocess(img.clone().cpu()).save("%s_%d.jpg" % (out_filename, idx))
+#                hyperparameters = "deep_gatys_style, content_filename=%s, style_filename=%s, model=%s, alpha=%s, lr=%s, n_iters=%d, n_octave=%d, octave_scale=%s, detail_decay=%s, iter=%d" % (content_filename, style_filename, model.name, str(alpha), lr, n_iters, n_octave, octave_scale, detail_decay, idx)
+#                system("exiftool -overwrite_original -ImageDescription='%s' '%s_%d.jpg'" % (hyperparameters, out_filename, idx)) 
 
         #separate accrued detail from the (possibly downsampled) base image
         detail = img - content_octave
 
-        #save the image on each octave
-        deprocess(img.squeeze(0).clone().cpu()).save("%s_octave_%d.jpg" % (out_filename, octave_idx))
-        hyperparameters = "deep_gatys_style, content_filename=%s, style_filename=%s, model=%s, alpha=%s, lr=%s, n_iters=%d, n_octave=%d, octave_scale=%s, detail_decay=%s, iter=%d" % (content_filename, style_filename, model.name, str(alpha), lr, n_iters, n_octave, octave_scale, detail_decay, idx)
-        system("exiftool -overwrite_original -ImageDescription='%s' '%s_octave_%d.jpg'" % (hyperparameters, out_filename, octave_idx)) 
-
-
-
+        #save the image 
+        if octave_idx + 1 == n_octave:
+            filename = "%s_%s.jpg" % (out_filename, str(int(time())))
+            deprocess(img.clone().cpu()).save(filename)
+            hyperparameters = "deep_gatys_style, content_filename=%s, style_filename=%s, model=%s, alpha=%s, beta=%s, gamma=%s, lr=%s, n_iters=%d, n_octave=%d, octave_scale=%s, detail_decay=%s, iter=%d" % (content_filename, style_filename, model.name, str(alpha), str(beta), str(gamma), lr, n_iters, n_octave, octave_scale, detail_decay, idx)
+            system("exiftool -overwrite_original -ImageDescription='%s' '%s'" % (hyperparameters, filename)) 
 
 def preprocess(img):
     convert   = transforms.ToTensor()
@@ -175,6 +184,14 @@ def deprocess(img):
     convert     = transforms.ToPILImage()
     transform   = transforms.Compose((squeeze, normalize_0, normalize_1, clamp, convert))
     return transform(img)
+
+def clipping_loss(img):
+    loss = torch.zeros(1, dtype=torch.float32, requires_grad=True).cuda()
+    
+    loss = loss + img[img > MAXS].square().sum()
+    loss = loss + img[img < MINS].square().sum()
+
+    return loss
 
 def tv_loss(generated_activations):
     loss = torch.zeros(1, dtype=torch.float32, requires_grad=True).cuda()
