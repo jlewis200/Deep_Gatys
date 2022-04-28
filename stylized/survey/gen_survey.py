@@ -26,7 +26,7 @@ def gen_survey_image(path):
 
     #store image/label map
     print(label_map)
-    system("echo '%s' >> randomization_key.txt" % str(label_map))
+    #system("echo '%s' >> randomization_key.txt" % str(label_map))
 
     #open the images
     for key in label_map.keys():
@@ -57,11 +57,12 @@ def gen_survey_image(path):
 def label_img(img, label):
     ImageDraw.Draw(img).text((10, 10), label, font=FONT, stroke_width=5, fill=(0,0,0), stroke_fill=(255, 255, 255))
 
+gen_survey_image("11_4")
 
-system("echo '' > randomization_key.txt")
-for entry in scandir():
-    if entry.is_dir():
-        gen_survey_image(entry.name)
+#system("echo '' > randomization_key.txt")
+#for entry in scandir():
+#    if entry.is_dir():
+#        gen_survey_image(entry.name)
 
 
 
