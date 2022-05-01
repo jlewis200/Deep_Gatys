@@ -18,8 +18,25 @@ def gen_survey_image(path):
 
         elif "style" in entry.path:
             label_map["Style"] = entry.path
+        
+        elif "deep_gatys" in entry.path:
+            label_map["Deep-Gatys"] = entry.path
+
+        elif "gatys" in entry.path:
+            label_map["Gatys"] = entry.path
+
+        elif "deep_dream" in entry.path:
+            label_map["Deep-Dream"] = entry.path
+
+        elif "transformer" in entry.path:
+            label_map["Transformer"] = entry.path
+
+
 
         else:
+            print(path)
+            print(entry)
+            exit()
             label = choice(labels)
             labels.remove(label)
             label_map[label] = entry.path
@@ -46,10 +63,10 @@ def gen_survey_image(path):
 
     survey_img.paste(label_map["Content"], (0,       0))
     survey_img.paste(label_map["Style"],   (size[0], 0))
-    survey_img.paste(label_map["A"],       (0,       size[1]))
-    survey_img.paste(label_map["B"],       (size[0], size[1]))
-    survey_img.paste(label_map["C"],       (0,       size[1] * 2))
-    survey_img.paste(label_map["D"],       (size[0], size[1] * 2))
+    survey_img.paste(label_map["Gatys"],       (0,       size[1]))
+    survey_img.paste(label_map["Deep-Gatys"],       (size[0], size[1]))
+    survey_img.paste(label_map["Deep-Dream"],       (0,       size[1] * 2))
+    survey_img.paste(label_map["Transformer"],       (size[0], size[1] * 2))
 
     survey_img.save("survey_%s.jpg" % path)
 
@@ -57,12 +74,10 @@ def gen_survey_image(path):
 def label_img(img, label):
     ImageDraw.Draw(img).text((10, 10), label, font=FONT, stroke_width=5, fill=(0,0,0), stroke_fill=(255, 255, 255))
 
-gen_survey_image("11_4")
-
 #system("echo '' > randomization_key.txt")
-#for entry in scandir():
-#    if entry.is_dir():
-#        gen_survey_image(entry.name)
+for entry in scandir():
+    if entry.is_dir():
+        gen_survey_image(entry.name)
 
 
 
