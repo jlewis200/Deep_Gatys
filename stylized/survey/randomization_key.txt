@@ -1,14 +1,71 @@
+{C: 1_7/1_7_1.0_70.jpg
+ A: 1_7/1_7_tuning_1650814257.jpg
+ Style: 1_7/1_7_0.0_style.jpg
+ B: 1_7/1_7_0.transformer.jpg
+ Content: 1_7/1_7_0.0_content.jpg
+ D: 1_7/1_7_tuning_1650814764.jpg}
 
-{A: 4_3/4_3_0.6_90.jpg, B: 4_3/4_3_0.transformer.jpg, D: 4_3/4_3_tuning_1650741892.jpg, Style: 4_3/4_3_0.0_style.jpg, Content: 4_3/4_3_0.0_content.jpg, C: 4_3/4_3_tuning_1650743704.jpg}
-{C: 11_1/11_1_0.transformer.jpg, A: 11_1/11_1_1.2_60.jpg, D: 11_1/11_1_tuning_1650754268.jpg, Content: 11_1/11_1_0.0_content.jpg, Style: 11_1/11_1_0.0_style.jpg, B: 11_1/11_1_tuning_1650806668.jpg}
-{C: 1_8/1_8_1.0_50.jpg, A: 1_8/1_8_0.transformer.jpg, Style: 1_8/1_8_0.0_style.jpg, D: 1_8/1_8_tuning_1650748900.jpg, Content: 1_8/1_8_0.0_content.jpg, B: 1_8/1_8_tuning_1650750383.jpg}
-{C: 1_7/1_7_1.0_70.jpg, A: 1_7/1_7_tuning_1650814257.jpg, Style: 1_7/1_7_0.0_style.jpg, B: 1_7/1_7_0.transformer.jpg, Content: 1_7/1_7_0.0_content.jpg, D: 1_7/1_7_tuning_1650814764.jpg}
-{B: 5_1/5_1_1.0_50.jpg, C: 5_1/5_1_tuning_1651109068.jpg, D: 5_1/5_1_0.transformer.jpg, A: 5_1/5_1_tuning_1650812211.jpg, Content: 5_1/5_1_0.0_content.jpg, Style: 5_1/5_1_0.0_style.jpg}
-{Content: 5_2/5_2_0.0_content.jpg, D: 5_2/5_2_tuning_1650813346.jpg, Style: 5_2/5_2_0.0_style.jpg, B: 5_2/5_2_tuning_1651102593.jpg, C: 5_2/5_2_0.transformer.jpg, A: 5_2/5_2_1.0_70.jpg}
-{B: 12_9/12_9_tuning_1650810220.jpg, D: 12_9/12_9_tuning_1650810631.jpg, C: 12_9/12_9_0.transformer.jpg, A: 12_9/12_9_1.0_50.jpg, Style: 12_9/12_9_0.0_style.jpg, Content: 12_9/12_9_0.0_content.jpg}
-{'D': '11_5/11_5_0.transformer.jpg', 'B': '11_5/11_5_0.6_50.jpg', 'Content': '11_5/11_5_0.0_content.jpg', 'C': '11_5/11_5_tuning_1650751477.jpg', 'Style': '11_5/11_5_0.0_style.jpg', 'A': '11_5/11_5_tuning_1651111112.jpg'}
-{'Style': '12_4/12_4_0.0_style.jpg', 'D': '12_4/12_4_0.transformer.jpg', 'Content': '12_4/12_4_0.0_content.jpg', 'B': '12_4/12_4_tuning_1650809617.jpg', 'A': '12_4/12_4_0.6_50.jpg', 'C': '12_4/12_4_tuning_1651110172.jpg'}
+{C: 1_8/1_8_1.0_50.jpg
+ A: 1_8/1_8_0.transformer.jpg
+ Style: 1_8/1_8_0.0_style.jpg
+ D: 1_8/1_8_tuning_1650748900.jpg
+ Content: 1_8/1_8_0.0_content.jpg
+ B: 1_8/1_8_tuning_1650750383.jpg}
 
-{'Content': '11_4/11_4_0.0_content.jpg', 'C': '11_4/11_4_0.6_50.jpg', 'D': '11_4/11_4_0.transformer.jpg', 'B': '11_4/11_4_tuning_1651111930.jpg', 'Style': '11_4/11_4_0.0_style.jpg', 'A': '11_4/11_4_tuning_1650754150.jpg'}
+{A: 4_3/4_3_0.6_90.jpg
+ B: 4_3/4_3_0.transformer.jpg
+ D: 4_3/4_3_tuning_1650741892.jpg
+ Style: 4_3/4_3_0.0_style.jpg
+ Content: 4_3/4_3_0.0_content.jpg
+ C: 4_3/4_3_tuning_1650743704.jpg}
+
+{B: 5_1/5_1_1.0_50.jpg
+ C: 5_1/5_1_tuning_1651109068.jpg
+ D: 5_1/5_1_0.transformer.jpg
+ A: 5_1/5_1_tuning_1650812211.jpg
+ Content: 5_1/5_1_0.0_content.jpg
+ Style: 5_1/5_1_0.0_style.jpg}
+
+{Content: 5_2/5_2_0.0_content.jpg
+ D: 5_2/5_2_tuning_1650813346.jpg
+ Style: 5_2/5_2_0.0_style.jpg
+ B: 5_2/5_2_tuning_1651102593.jpg
+ C: 5_2/5_2_0.transformer.jpg
+ A: 5_2/5_2_1.0_70.jpg}
+
+{C: 11_1/11_1_0.transformer.jpg
+ A: 11_1/11_1_1.2_60.jpg
+ D: 11_1/11_1_tuning_1650754268.jpg
+ Content: 11_1/11_1_0.0_content.jpg
+ Style: 11_1/11_1_0.0_style.jpg
+ B: 11_1/11_1_tuning_1650806668.jpg}
+
+{'Content': '11_4/11_4_0.0_content.jpg'
+ 'C': '11_4/11_4_0.6_50.jpg'
+ 'D': '11_4/11_4_0.transformer.jpg'
+ 'B': '11_4/11_4_tuning_1651111930.jpg'
+ 'Style': '11_4/11_4_0.0_style.jpg'
+ 'A': '11_4/11_4_tuning_1650754150.jpg'}
+
+{'D': '11_5/11_5_0.transformer.jpg'
+ 'B': '11_5/11_5_0.6_50.jpg'
+ 'Content': '11_5/11_5_0.0_content.jpg'
+ 'C': '11_5/11_5_tuning_1650751477.jpg'
+ 'Style': '11_5/11_5_0.0_style.jpg'
+ 'A': '11_5/11_5_tuning_1651111112.jpg'}
+
+{'Style': '12_4/12_4_0.0_style.jpg'
+ 'D': '12_4/12_4_0.transformer.jpg'
+ 'Content': '12_4/12_4_0.0_content.jpg'
+ 'B': '12_4/12_4_tuning_1650809617.jpg'
+ 'A': '12_4/12_4_0.6_50.jpg'
+ 'C': '12_4/12_4_tuning_1651110172.jpg'}
+
+{B: 12_9/12_9_tuning_1650810220.jpg
+ D: 12_9/12_9_tuning_1650810631.jpg
+ C: 12_9/12_9_0.transformer.jpg
+ A: 12_9/12_9_1.0_50.jpg
+ Style: 12_9/12_9_0.0_style.jpg
+ Content: 12_9/12_9_0.0_content.jpg}
 
 

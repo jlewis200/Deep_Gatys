@@ -8,7 +8,9 @@ import random
 
 from torchvision import models, transforms
 from torch.nn.functional import interpolate
+from torchvision.transforms.functional import rotate 
 from PIL import Image
+from scipy import ndimage
 from time import time
 from os import system
 from code import interact
@@ -22,39 +24,7 @@ MINS = (-MEAN / STD).unsqueeze(0).unsqueeze(-1).unsqueeze(-1).cuda()
 MAXS = ((1 - MEAN) / STD).unsqueeze(0).unsqueeze(-1).unsqueeze(-1).cuda()
 
 def main():
-    ####################################################################################################################
-    #  *****update model name when swapping models to ensure image meta data is acccurate*****
-    model = models.vgg19(pretrained=True).to("cuda")
-    model.name="torchvision.models.vgg19"
-    ####################################################################################################################
-
-    style_layers = [model.features[idx] for idx in [1, 6, 11, 20, 29]]
-    content_layer = model.features[22]
-    
-    #replace maxpooling layers with avgpool as per Gatys et al.
-    for idx in range(len(model.features)):
-        model.features[idx].requires_grad_(False)
-        if isinstance(model.features[idx], torch.nn.modules.pooling.MaxPool2d):
-            maxpool = model.features[idx]
-            model.features[idx] = torch.nn.AvgPool2d(kernel_size=maxpool.kernel_size,
-                                                     stride=maxpool.stride,
-                                                     padding=maxpool.padding,
-                                                     ceil_mode=maxpool.ceil_mode)
-  
-    content_filename = "11"
-    style_filename = "1"
-
-    for n_iters in range(10, 65, 5):
-        for n_octave in range(2, 6):
-            transfer_style("content/%s.jpg" % content_filename, 
-                           "style/%s.jpg" % style_filename,
-                           "stylized/deep_gatys/%s_%s_tuning" % (content_filename, style_filename),
-                           model,
-                           content_layer,
-                           style_layers,
-                           n_iters=n_iters,
-                           n_octave=n_octave,
-                           octave_scale=2)
+    manual_mode()
 
 def hyperparameter_sweep():
     ####################################################################################################################
@@ -62,6 +32,7 @@ def hyperparameter_sweep():
     model = models.vgg19(pretrained=True).to("cuda")
     model.name="torchvision.models.vgg19"
     ####################################################################################################################
+    print(model)
 
     style_layers = [model.features[idx] for idx in [1, 6, 11, 20, 29]]
     content_layer = model.features[22]
@@ -133,14 +104,46 @@ def hyperparameter_sweep():
                                style_layers,
                                octave_scale=octave_scale)
 
-            for detail_decay in [1.0, 0.9, 0.8, 0.7]:
-                transfer_style("content/%s.jpg" % content_filename, 
-                               "style/%s.jpg" % style_filename,
-                               "stylized/deep_gatys/%s_%s_detail_decay" % (content_filename, style_filename),
-                               model,
-                               content_layer,
-                               style_layers,
-                               detail_decay=detail_decay)
+def manual_mode():
+    ####################################################################################################################
+    #  *****update model name when swapping models to ensure image meta data is acccurate*****
+    model = models.vgg19(pretrained=True).to("cuda")
+    model.name="torchvision.models.vgg19"
+    ####################################################################################################################
+    print(model)
+   
+    #replace maxpooling layers with avgpool as per Gatys et al.
+    for idx in range(len(model.features)):
+        model.features[idx].requires_grad_(False)
+        if isinstance(model.features[idx], torch.nn.modules.pooling.MaxPool2d):
+            maxpool = model.features[idx]
+            model.features[idx] = torch.nn.AvgPool2d(kernel_size=maxpool.kernel_size,
+                                                     stride=maxpool.stride,
+                                                     padding=maxpool.padding,
+                                                     ceil_mode=maxpool.ceil_mode)
+
+    style_layers = [model.features[idx] for idx in [1, 6, 11, 20, 29]]
+    content_layer = model.features[36]
+  
+    content_filename = "5"
+    style_filename = "2"
+ 
+    for rotate in [True, False]:
+        transfer_style("content/%s.jpg" % content_filename, 
+                       "style/%s.jpg" % style_filename,
+                       "stylized/deep_gatys/%s_%s_tuning" % (content_filename, style_filename),
+                       model,
+                       content_layer,
+                       style_layers,
+                       alpha=1e-8,
+                       beta=1e-99,
+                       gamma=0,
+                       lr=0.02,
+                       n_iters=256,
+                       n_octave=4,
+                       octave_scale=2,
+                       rotate=rotate)
+
 
 def transfer_style(content_filename,  #content image filename
                    style_filename,    #style image filename
@@ -148,15 +151,14 @@ def transfer_style(content_filename,  #content image filename
                    model,             #the pretrained CNN that will be used to generate the image
                    content_layer,     #the content layer of the model
                    style_layers,      #the style layers of the model
-                   alpha=1e-11,       #weight of content loss
-                   beta=0,        #weight of tv loss
-                   gamma=0,       #weight of clipping loss
-                   lr=0.1,            #learning rate
-                   n_iters=10,      #number of gradient ascent steps per octave
-                   n_octave=4,        #number of times to process downsampled images
-                   octave_scale=1.4,  #scale factor for each octave
-                   detail_decay=1):   #scaler for previous octave's detail
-     
+                   alpha=1e-10,       #weight of content loss
+                   beta=1e-9,         #weight of tv loss
+                   gamma=0,           #weight of clipping loss
+                   lr=0.2,            #learning rate
+                   n_iters=10,        #number of gradient ascent steps per octave
+                   n_octave=2,        #number of times to process downsampled images
+                   octave_scale=3,    #scale factor for each octave
+                   rotate=True):      #apply rotation regulatization
 
     #expand tensor has 4 dimensions (N x C x H x W)
     content_img = preprocess(Image.open(content_filename)).cuda()
@@ -190,25 +192,44 @@ def transfer_style(content_filename,  #content image filename
     #iterate through images from lowest to highest resolution
     for octave_idx, (content_octave, style_octave) in enumerate(zip(content_octaves[::-1], style_octaves[::-1])):
 
+        #get activations
+        content_activation_list = list()
+        style_grams_list = list()
+
+        for idx in range(4):
+            content_octave = content_octave.rot90(k=1, dims=(2, 3))
+            style_octave = style_octave.rot90(k=-1, dims=(2, 3))
+
+            #get content layer activations for content image
+            model.forward(content_octave)
+            content_activation_list.append(activations[content_layer])
+
+            #get style layer gram matrices for style image
+            model.forward(style_octave)
+            style_grams_list.append([gram_matrix(activations[style_layer]) for style_layer in style_layers])
+
+        #default activation/grams are original orientation after 4 rotations
+        content_activation = content_activation_list[3]
+        style_grams = style_grams_list[3]    
+
         #upsample lower-res detail of previous iteration to shape of current octave
         detail = interpolate(detail, size=content_octave.shape[-2:], align_corners=True, mode="bilinear")        
-   
-        
-        #get content layer activations for content image
-        model.forward(content_octave)
-        content_activation = activations[content_layer]
-
-        #get style layer gram matrices for style image
-        model.forward(style_octave)
-        style_grams = [gram_matrix(activations[style_layer]) for style_layer in style_layers]
-       
+ 
         #add previously accrued detail to the (possibly downsampled) base img
-        img = (content_octave.clone().detach() + detail_decay * detail.clone().detach()).detach().requires_grad_(True).cuda()
-        optimizer = torch.optim.Adam([img], betas=(0.9, 0.999), weight_decay=0, lr=lr)
+        img = (content_octave.clone().detach() + detail.clone().detach()).detach().requires_grad_(True).cuda()
+        optimizer = torch.optim.Adam([img], betas=(0.0, 0.0), weight_decay=0, lr=lr)
 
         #perform iterative gradient descent for current content_octave
         for idx in range(n_iters):
+            if rotate:
+                content_activation = content_activation_list[idx % 4]
+                style_grams = style_grams_list[idx % 4]
+
+                img = img.rot90(k=1, dims=(2, 3)).clone().detach().requires_grad_(True).cuda()
             
+            optimizer = torch.optim.Adam([img], betas=(0.0, 0.0), weight_decay=0, lr=lr)
+
+               
             #backprop to the image
             model.zero_grad()
             optimizer.zero_grad()
@@ -227,12 +248,10 @@ def transfer_style(content_filename,  #content image filename
             optimizer.step()
        
             print("iter:  %d, %f %f %f %f" %(idx, l_content, l_style, l_tv, l_clipping))
-
-#            #save the image periodically
-#            if idx  % 100 == 0:
-#                deprocess(img.clone().cpu()).save("%s_%d.jpg" % (out_filename, idx))
-#                hyperparameters = "deep_gatys_style, content_filename=%s, style_filename=%s, model=%s, alpha=%s, lr=%s, n_iters=%d, n_octave=%d, octave_scale=%s, detail_decay=%s, iter=%d" % (content_filename, style_filename, model.name, str(alpha), lr, n_iters, n_octave, octave_scale, detail_decay, idx)
-#                system("exiftool -overwrite_original -ImageDescription='%s' '%s_%d.jpg'" % (hyperparameters, out_filename, idx)) 
+            
+        #orient img vertically
+        if rotate:
+            img = img.rot90(k=(4 - (n_iters % 4)), dims=(2, 3)).cuda()
 
         #separate accrued detail from the (possibly downsampled) base image
         detail = img - content_octave
@@ -241,7 +260,7 @@ def transfer_style(content_filename,  #content image filename
         if octave_idx + 1 == n_octave:
             filename = "%s_%s.jpg" % (out_filename, str(int(time())))
             deprocess(img.clone().cpu()).save(filename)
-            hyperparameters = "deep_gatys_style, content_filename=%s, style_filename=%s, model=%s, alpha=%s, beta=%s, gamma=%s, lr=%s, n_iters=%d, n_octave=%d, octave_scale=%s, detail_decay=%s, iter=%d" % (content_filename, style_filename, model.name, str(alpha), str(beta), str(gamma), lr, n_iters, n_octave, octave_scale, detail_decay, idx)
+            hyperparameters = "deep_gatys_style, content_filename=%s, style_filename=%s, model=%s, alpha=%s, beta=%s, gamma=%s, lr=%s, n_iters=%d, n_octave=%d, octave_scale=%s, iter=%d" % (content_filename, style_filename, model.name, str(alpha), str(beta), str(gamma), lr, n_iters, n_octave, octave_scale, idx)
             system("exiftool -overwrite_original -ImageDescription='%s' '%s'" % (hyperparameters, filename)) 
 
 def preprocess(img):
@@ -276,7 +295,6 @@ def tv_loss(generated_activations):
 
     #form a flattened vector containing all cols except final and from that subtract a flattened vector containing all cols except first (across all channels)
     loss = loss + (generated_activations[0, :, :, 1:].flatten() - generated_activations[0, :, :, :-1].flatten()).square().sum()
-    
     return loss    
 
 def style_loss(generated_activations, style_grams):
