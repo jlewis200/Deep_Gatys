@@ -15,8 +15,9 @@ STD  = torch.tensor([0.229, 0.224, 0.225])
 def main():
     #model = models.vgg19(pretrained=True).to("cuda")
     model = models.googlenet(pretrained=True).to("cuda")
+    print(model)
     
-    deepdream("content_images/clouds.jpeg", model.inception4c, model, "clouds_normed", step_size=5, n_iters=50, octave_scale=1.4, n_octave=4)
+    deepdream("content_images/clouds.jpeg", model.inception4e, model, "clouds_normed", step_size=15, n_iters=50, octave_scale=1.4, n_octave=4)
     #deepdream("content_images/beksinski_1.jpg", 36, model, "beksinski_1", step_size=5, n_iters=100)
     #deepdream("content_images/beksinski_2.jpg", 36, model, "beksinski_2", step_size=5, n_iters=100)
     #deepdream("content_images/beksinski_3.jpg", 36, model, "beksinski_3", step_size=5, n_iters=100, octave_scale=1.2, n_octave=10)
@@ -100,8 +101,8 @@ def deepdream(in_filename, #input image filename
 
             #make forward pass and set loss function
             model.forward(img_var)
-            #loss = activations[target_layer].sum()
-            loss = torch.linalg.norm(activations[target_layer])
+            loss = activations[target_layer].sum()
+            #loss = torch.linalg.norm(activations[target_layer])
 
             #backprop to the image
             model.zero_grad()
