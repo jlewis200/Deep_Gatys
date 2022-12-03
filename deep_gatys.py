@@ -44,14 +44,14 @@ def main():
     parser.add_argument("out",     type=str, help="output image path")
 
     #options
-    parser.add_argument("-a", "--alpha",         type=float, default=1e-10, help="weight of content loss")
-    parser.add_argument("-b", "--beta",          type=float, default=1e-99, help="weight of total variational loss")
-    parser.add_argument("-g", "--gamma",         type=float, default=0,     help="weight of clipping loss")
-    parser.add_argument("-l", "--learning-rate", type=float, default=0.01,  help="learning rate of optimizer")
-    parser.add_argument("-i", "--iterations",    type=int,   default=512,   help="number of optimizer steps per octave")
-    parser.add_argument("-k", "--octaves",       type=int,   default=2,     help="number of octaves")
-    parser.add_argument("-v", "--octave-scale",  type=float, default=2,     help="downsampling scale between octaves")
-    parser.add_argument("-r", "--rotate",        action="store_true",       help="apply rotation regularization")
+    parser.add_argument("-a", "--alpha", type=float, default=1e-10, help="weight of content loss")
+    parser.add_argument("-b", "--beta", type=float, default=1e-99, help="weight of total variational loss")
+    parser.add_argument("-g", "--gamma", type=float, default=0, help="weight of clipping loss")
+    parser.add_argument("-l", "--learning-rate", type=float, default=0.01, help="learning rate of optimizer")
+    parser.add_argument("-i", "--iterations", type=int, default=512, help="number of optimizer steps per octave")
+    parser.add_argument("-k", "--octaves", type=int, default=2, help="number of octaves")
+    parser.add_argument("-v", "--octave-scale", type=float, default=2, help="downsampling scale between octaves")
+    parser.add_argument("-r", "--rotate", action="store_true", help="apply rotation regularization")
 
     args = parser.parse_args()
 
@@ -125,8 +125,8 @@ def transfer_style(content_filename,  #content image filename
         content_img = content_img.cuda()
         style_img = style_img.cuda()
 
-    #register forward hook to extract layer activations
-    #adapted from:  https://discuss.pytorch.org/t/how-can-i-extract-intermediate-layer-output-from-loaded-cnn-model/77301
+    #register forward hook to extract layer activations adapted from:
+    #https://discuss.pytorch.org/t/how-can-i-extract-intermediate-layer-output-from-loaded-cnn-model/77301
     activations = {}
 
     def get_activation(self, _, out):
@@ -140,9 +140,19 @@ def transfer_style(content_filename,  #content image filename
     #place model in eval mode
     model.eval()
 
-    #generate zoomed-out/lower-res images, content_octaves[0]:  original resolution, content_octaves[-1]:  lowest resolution
-    content_octaves = [interpolate(content_img, scale_factor=1/octave_scale**idx, recompute_scale_factor=False, align_corners=True, mode="bilinear") for idx in range(n_octave)]
-    style_octaves = [interpolate(style_img, scale_factor=1/octave_scale**idx, recompute_scale_factor=False, align_corners=True, mode="bilinear") for idx in range(n_octave)]
+    #generate zoomed-out/lower-res images
+    #content_octaves[0]:  original resolution; content_octaves[-1]:  lowest resolution
+    content_octaves = [interpolate(content_img,
+                                   scale_factor=1/octave_scale**idx,
+                                   recompute_scale_factor=False,
+                                   align_corners=True,
+                                   mode="bilinear") for idx in range(n_octave)]
+
+    style_octaves = [interpolate(style_img,
+                                 scale_factor=1/octave_scale**idx,
+                                 recompute_scale_factor=False,
+                                 align_corners=True,
+                                 mode="bilinear") for idx in range(n_octave)]
 
     #detail tensor accumulates the changes made to the image during the iterative gradient ascent
     detail = torch.zeros_like(content_octaves[-1])
@@ -158,9 +168,6 @@ def transfer_style(content_filename,  #content image filename
         style_grams_list = []
 
         for idx in range(4):
-            content_octave = content_octave.rot90(k=1, dims=(2, 3))
-            style_octave = style_octave.rot90(k=-1, dims=(2, 3))
-
             #get content layer activations for content image
             model.forward(content_octave)
             content_activation_list.append(activations[content_layer])
@@ -169,9 +176,12 @@ def transfer_style(content_filename,  #content image filename
             model.forward(style_octave)
             style_grams_list.append([gram_matrix(activations[style_layer]) for style_layer in style_layers])
 
-        #default activation/grams are original orientation after 4 rotations
-        content_activation = content_activation_list[3]
-        style_grams = style_grams_list[3]
+            content_octave = content_octave.rot90(k=1, dims=(2, 3))
+            style_octave = style_octave.rot90(k=-1, dims=(2, 3))
+
+        #default activation/grams with original orientation
+        content_activation = content_activation_list[0]
+        style_grams = style_grams_list[0]
 
         #upsample lower-res detail of previous iteration to shape of current octave
         detail = interpolate(detail, size=content_octave.shape[-2:], align_corners=True, mode="bilinear")
@@ -181,7 +191,6 @@ def transfer_style(content_filename,  #content image filename
 
         if torch.cuda.is_available():
             img = img.cuda()
-        optimizer = torch.optim.Adam([img], betas=(0.0, 0.0), weight_decay=0, lr=lr)
 
         print("iter   content  style    tv       clipping")
 
