@@ -154,10 +154,10 @@ def transfer_style(content_filename,  #content image filename
                    alpha=1e-10,       #weight of content loss
                    beta=1e-9,         #weight of tv loss
                    gamma=0,           #weight of clipping loss
-                   lr=0.2,            #learning rate
-                   n_iters=10,        #number of gradient ascent steps per octave
+                   lr=0.02,            #learning rate
+                   n_iters=256,        #number of gradient ascent steps per octave
                    n_octave=2,        #number of times to process downsampled images
-                   octave_scale=3,    #scale factor for each octave
+                   octave_scale=2,    #scale factor for each octave
                    rotate=True):      #apply rotation regulatization
 
     #expand tensor has 4 dimensions (N x C x H x W)
