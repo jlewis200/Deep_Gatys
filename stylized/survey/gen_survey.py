@@ -4,11 +4,11 @@ from PIL import Image, ImageDraw, ImageFont
 from os import scandir, system
 from random import choice
 
-FONT = ImageFont.truetype("Pillow/Tests/fonts/FreeMono.ttf", 50)
+FONT = ImageFont.truetype("Pillow/Tests/fonts/FreeMono.ttf", 80)
 
 
 def gen_survey_image(path):
-    labels = ['A', 'B', 'C']
+    labels = ['A', 'B', 'C', 'D']
     label_map = {}
 
     for entry in scandir(path):
@@ -49,12 +49,13 @@ def gen_survey_image(path):
     survey_img.paste(label_map["A"],       (0,       size[1]))
     survey_img.paste(label_map["B"],       (size[0], size[1]))
     survey_img.paste(label_map["C"],       (0,       size[1] * 2))
+    survey_img.paste(label_map["D"],       (size[0], size[1] * 2))
 
     survey_img.save("survey_%s.jpg" % path)
 
 
 def label_img(img, label):
-    ImageDraw.Draw(img).text((10, 10), label, font=FONT, stroke_width=3, fill=(0,0,0))
+    ImageDraw.Draw(img).text((10, 10), label, font=FONT, stroke_width=5, fill=(0,0,0), stroke_fill=(255, 255, 255))
 
 
 system("echo '' > randomization_key.txt")
