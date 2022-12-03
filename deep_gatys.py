@@ -6,13 +6,14 @@ one image is applied to the content of another image. This
 has applications in artistic settings as well as data augmentation.
 """
 
+from argparse import ArgumentParser
+
+#pylint: disable=no-member
 import torch
 
 from torchvision import models, transforms
 from torch.nn.functional import interpolate
-from torchvision.transforms.functional import rotate 
 from PIL import Image
-from argparse import ArgumentParser
 
 IMAGE_DESCRIPTION_EXIF_TAG = 0x10e
 
@@ -30,6 +31,10 @@ if torch.cuda.is_available():
 
 
 def main():
+    """
+    Perform a single style transfer using the specified by command line args.
+    """
+
     #get command line args
     parser = ArgumentParser(description="Transfer style from a source image to a content image")
 
@@ -52,7 +57,7 @@ def main():
 
     #load pre-trained model
     model = models.vgg19(weights=models.VGG19_Weights.IMAGENET1K_V1)
-    
+
     if torch.cuda.is_available():
         model = model.cuda()
 
@@ -71,8 +76,8 @@ def main():
 
     style_layers = [model.features[idx] for idx in [1, 3, 6, 8, 11, 13, 15, 17, 20, 22, 24, 26, 29, 31, 33, 35]]
     content_layer = model.features[22]
-  
-    transfer_style(args.content, 
+
+    transfer_style(args.content,
                    args.style,
                    args.out,
                    model,
@@ -102,33 +107,36 @@ def transfer_style(content_filename,  #content image filename
                    n_octave=2,        #number of times to process downsampled images
                    octave_scale=2,    #scale factor for each octave
                    rotate=True):      #apply rotation regulatization
+    """
+    Perform style transfer.
+    """
 
-    #expand tensor has 4 dimensions (N x C x H x W)
+    #expanded tensor has 4 dimensions (N x C x H x W)
     content_img = preprocess(Image.open(content_filename))
     style_img = preprocess(Image.open(style_filename))
+
+    #down/up sample style image to match content image
+    style_img = interpolate(style_img,
+                            size=content_img.shape[-2:],
+                            align_corners=True,
+                            mode="bilinear")
 
     if torch.cuda.is_available():
         content_img = content_img.cuda()
         style_img = style_img.cuda()
-    
-    #down/up sample style image to match content image
-    style_img = interpolate(style_img, size=content_img.shape[-2:], align_corners=True, mode="bilinear")
- 
-    if torch.cuda.is_available():
-        style_img = style_img.cuda()
-   
+
     #register forward hook to extract layer activations
     #adapted from:  https://discuss.pytorch.org/t/how-can-i-extract-intermediate-layer-output-from-loaded-cnn-model/77301
     activations = {}
-    
-    def get_activation(self, input, output):
-        activations[self] = output
-   
+
+    def get_activation(self, _, out):
+        activations[self] = out
+
     content_layer.register_forward_hook(get_activation)
 
     for layer in style_layers:
         layer.register_forward_hook(get_activation)
-    
+
     #place model in eval mode
     model.eval()
 
@@ -146,8 +154,8 @@ def transfer_style(content_filename,  #content image filename
     for octave_idx, (content_octave, style_octave) in enumerate(zip(content_octaves[::-1], style_octaves[::-1])):
 
         #get activations
-        content_activation_list = list()
-        style_grams_list = list()
+        content_activation_list = []
+        style_grams_list = []
 
         for idx in range(4):
             content_octave = content_octave.rot90(k=1, dims=(2, 3))
@@ -163,11 +171,11 @@ def transfer_style(content_filename,  #content image filename
 
         #default activation/grams are original orientation after 4 rotations
         content_activation = content_activation_list[3]
-        style_grams = style_grams_list[3]    
+        style_grams = style_grams_list[3]
 
         #upsample lower-res detail of previous iteration to shape of current octave
-        detail = interpolate(detail, size=content_octave.shape[-2:], align_corners=True, mode="bilinear")        
- 
+        detail = interpolate(detail, size=content_octave.shape[-2:], align_corners=True, mode="bilinear")
+
         #add previously accrued detail to the (possibly downsampled) base img
         img = (content_octave.clone().detach() + detail.clone().detach()).detach().requires_grad_(True)
 
@@ -184,13 +192,12 @@ def transfer_style(content_filename,  #content image filename
                 style_grams = style_grams_list[idx % 4]
 
                 img = img.rot90(k=1, dims=(2, 3)).clone().detach().requires_grad_(True)
-                
+
                 if torch.cuda.is_available():
                     img = img.cuda()
-            
+
             optimizer = torch.optim.Adam([img], betas=(0.0, 0.0), weight_decay=0, lr=lr)
 
-               
             #backprop to the image
             model.zero_grad()
             optimizer.zero_grad()
@@ -209,25 +216,24 @@ def transfer_style(content_filename,  #content image filename
             optimizer.step()
 
             print(f"{idx:<5}  {float(l_content):.5f}  {float(l_style):.5f}  {float(l_tv):.5f}  {float(l_clipping):.5f}")
-            
+
         #orient img vertically
         if rotate:
             img = img.rot90(k=(4 - (n_iters % 4)), dims=(2, 3))
-            
+
             if torch.cuda.is_available():
                 img = img.cuda()
 
         #separate accrued detail from the (possibly downsampled) base image
         detail = img - content_octave
 
-        #save the image 
+        #save the image
         if octave_idx + 1 == n_octave:
             pil_img = deprocess(img.clone().cpu())
 
             #set hyperparameters as exif metadata
             exif = pil_img.getexif()
-            exif[IMAGE_DESCRIPTION_EXIF_TAG] = f"deep_gatys, " \
-                                                "content_filename={content_filename}, " \
+            exif[IMAGE_DESCRIPTION_EXIF_TAG] = f"content_filename={content_filename}, " \
                                                 "style_filename={style_filename}, " \
                                                 "alpha={alpha}, " \
                                                 "beta={beta}, " \
@@ -241,6 +247,10 @@ def transfer_style(content_filename,  #content image filename
 
 
 def preprocess(img):
+    """
+    Accept a PIL image, normalize, return a tensor of the appropriate shape.
+    """
+
     convert   = transforms.ToTensor()
     normalize = transforms.Normalize(mean=MEAN, std=STD)
     unsqueeze = transforms.Lambda(lambda img : img.unsqueeze(0))
@@ -248,7 +258,12 @@ def preprocess(img):
     return transform(img)
 
 
-def deprocess(img):                                                                                 
+def deprocess(img):
+    """
+    Accept an image as a tensor, invert the preprocess normalization, return a
+    PIL image.
+    """
+
     squeeze     = transforms.Lambda(lambda img : img.squeeze(0))
     normalize_0 = transforms.Normalize(mean=torch.zeros(3), std=1/STD)
     normalize_1 = transforms.Normalize(mean=-MEAN, std=torch.ones(3))
@@ -259,11 +274,16 @@ def deprocess(img):
 
 
 def clipping_loss(img):
+    """
+    This loss function penalizes pixels which stray outside of the proper RGB
+    range.
+    """
+
     loss = torch.zeros(1, dtype=torch.float32, requires_grad=True)
-    
+
     if torch.cuda.is_available():
         loss = loss.cuda()
-    
+
     loss = loss + img[img > MAXS].square().sum()
     loss = loss + img[img < MINS].square().sum()
 
@@ -271,6 +291,10 @@ def clipping_loss(img):
 
 
 def tv_loss(generated_activations):
+    """
+    This loss function penalizes adjacent pixels with very large differences.
+    """
+
     loss = torch.zeros(1, dtype=torch.float32, requires_grad=True)
 
     if torch.cuda.is_available():
@@ -281,17 +305,22 @@ def tv_loss(generated_activations):
 
     #form a flattened vector containing all cols except final and from that subtract a flattened vector containing all cols except first (across all channels)
     loss = loss + (generated_activations[0, :, :, 1:].flatten() - generated_activations[0, :, :, :-1].flatten()).square().sum()
-    return loss    
+    return loss
 
 
 def style_loss(generated_activations, style_grams):
+    """
+    This loss function penalizes style differences between the generated image
+    and the style image.
+    """
+
     loss = torch.zeros(1, dtype=torch.float32, requires_grad=True)
 
     if torch.cuda.is_available():
         loss = loss.cuda()
 
     layer_weight = 1.0 / len(generated_activations)  #equal layer weights, summing to 1 as per Gatys et al.
-    
+
     for generated_activation, style_gram in zip(generated_activations, style_grams):
         layer_scaler = layer_weight / (4 * generated_activation.numel()**2)
         loss = loss + (gram_matrix(generated_activation) - style_gram.detach()).square().sum().mul(layer_scaler)
@@ -300,11 +329,20 @@ def style_loss(generated_activations, style_grams):
 
 
 def content_loss(generated_activation, content_activation):
+    """
+    This loss function penalizes content differences between the generated image
+    and the content image.
+    """
+
     loss = (generated_activation - content_activation.detach()).square().sum()
     return loss
 
 
 def gram_matrix(activations):
+    """
+    Returns the gram matrix given a set of layer activations.
+    """
+
     #flatten dims 2 and 3
     activations = activations.flatten(start_dim=2)
 
