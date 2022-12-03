@@ -21,8 +21,42 @@ STD  = torch.tensor([0.229, 0.224, 0.225])
 MINS = (-MEAN / STD).unsqueeze(0).unsqueeze(-1).unsqueeze(-1).cuda()
 MAXS = ((1 - MEAN) / STD).unsqueeze(0).unsqueeze(-1).unsqueeze(-1).cuda()
 
-
 def main():
+    ####################################################################################################################
+    #  *****update model name when swapping models to ensure image meta data is acccurate*****
+    model = models.vgg19(pretrained=True).to("cuda")
+    model.name="torchvision.models.vgg19"
+    ####################################################################################################################
+
+    style_layers = [model.features[idx] for idx in [1, 6, 11, 20, 29]]
+    content_layer = model.features[22]
+    
+    #replace maxpooling layers with avgpool as per Gatys et al.
+    for idx in range(len(model.features)):
+        model.features[idx].requires_grad_(False)
+        if isinstance(model.features[idx], torch.nn.modules.pooling.MaxPool2d):
+            maxpool = model.features[idx]
+            model.features[idx] = torch.nn.AvgPool2d(kernel_size=maxpool.kernel_size,
+                                                     stride=maxpool.stride,
+                                                     padding=maxpool.padding,
+                                                     ceil_mode=maxpool.ceil_mode)
+  
+    content_filename = "11"
+    style_filename = "1"
+
+    for n_iters in range(10, 65, 5):
+        for n_octave in range(2, 6):
+            transfer_style("content/%s.jpg" % content_filename, 
+                           "style/%s.jpg" % style_filename,
+                           "stylized/deep_gatys/%s_%s_tuning" % (content_filename, style_filename),
+                           model,
+                           content_layer,
+                           style_layers,
+                           n_iters=n_iters,
+                           n_octave=n_octave,
+                           octave_scale=2)
+
+def hyperparameter_sweep():
     ####################################################################################################################
     #  *****update model name when swapping models to ensure image meta data is acccurate*****
     model = models.vgg19(pretrained=True).to("cuda")
