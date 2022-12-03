@@ -250,7 +250,7 @@ def preprocess(img):
     """
     Accept a PIL image, normalize, return a tensor of the appropriate shape.
     """
-
+    img = img.convert("RGB")
     convert   = transforms.ToTensor()
     normalize = transforms.Normalize(mean=MEAN, std=STD)
     unsqueeze = transforms.Lambda(lambda img : img.unsqueeze(0))
