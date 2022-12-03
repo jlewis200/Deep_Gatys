@@ -45,27 +45,68 @@ def main():
     for content_filename in [str(idx) for idx in range(1, 13)]:
         for style_filename in [str(idx) for idx in range(1, 10)]:
             for alpha in [1e-11, 1e-10, 1e-9, 1e-8, 1e-7]:
-                for beta in [0, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5]:
-                    for gamma in [0, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5]:
-                        for n_iters in [5, 10, 20, 40]:
-                            for n_octave in [1, 2, 3, 4, 5, 6]:
-                                for octave_scale in [1.2, 1.4, 1.6]:
-                                    for detail_decay in [1.0, 0.9, 0.8, 0.7]:
-                                        transfer_style("content/%s.jpg" % content_filename, 
-                                                       "style/%s.jpg" % style_filename,
-                                                       "stylized/deep_gatys/%s_%s" % (content_filename, style_filename),
-                                                       model,
-                                                       content_layer,
-                                                       style_layers,
-                                                       alpha = alpha,
-                                                       beta  = beta,
-                                                       gamma = gamma,
-                                                       lr=0.1,
-                                                       n_iters=n_iters,
-                                                       n_octave=n_octave,
-                                                       octave_scale=octave_scale,
-                                                       detail_decay=detail_decay)
+                transfer_style("content/%s.jpg" % content_filename, 
+                               "style/%s.jpg" % style_filename,
+                               "stylized/deep_gatys/%s_%s_alpha" % (content_filename, style_filename),
+                               model,
+                               content_layer,
+                               style_layers,
+                               alpha=alpha)
 
+            for beta in [0, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5]:
+                transfer_style("content/%s.jpg" % content_filename, 
+                               "style/%s.jpg" % style_filename,
+                               "stylized/deep_gatys/%s_%s_beta" % (content_filename, style_filename),
+                               model,
+                               content_layer,
+                               style_layers,
+                               beta=beta)
+
+            for gamma in [0, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5]:
+                transfer_style("content/%s.jpg" % content_filename, 
+                               "style/%s.jpg" % style_filename,
+                               "stylized/deep_gatys/%s_%s_gamma" % (content_filename, style_filename),
+                               model,
+                               content_layer,
+                               style_layers,
+                               gamma=gamma)
+
+            for n_iters in [5, 10, 20, 40]:
+                transfer_style("content/%s.jpg" % content_filename, 
+                               "style/%s.jpg" % style_filename,
+                               "stylized/deep_gatys/%s_%s_n_iters" % (content_filename, style_filename),
+                               model,
+                               content_layer,
+                               style_layers,
+                               n_iters=n_iters)
+
+            for n_octave in [1, 2, 3, 4, 5, 6]:
+                transfer_style("content/%s.jpg" % content_filename, 
+                               "style/%s.jpg" % style_filename,
+                               "stylized/deep_gatys/%s_%s_n_octave" % (content_filename, style_filename),
+                               model,
+                               content_layer,
+                               style_layers,
+                               n_octave=n_octave,
+                               n_iters=round(40//n_octave)) #maintain total number of iterations for fair comparison
+
+            for octave_scale in [1.2, 1.4, 1.6]:
+                transfer_style("content/%s.jpg" % content_filename, 
+                               "style/%s.jpg" % style_filename,
+                               "stylized/deep_gatys/%s_%s_octave_scale" % (content_filename, style_filename),
+                               model,
+                               content_layer,
+                               style_layers,
+                               octave_scale=octave_scale)
+
+            for detail_decay in [1.0, 0.9, 0.8, 0.7]:
+                transfer_style("content/%s.jpg" % content_filename, 
+                               "style/%s.jpg" % style_filename,
+                               "stylized/deep_gatys/%s_%s_detail_decay" % (content_filename, style_filename),
+                               model,
+                               content_layer,
+                               style_layers,
+                               detail_decay=detail_decay)
 
 def transfer_style(content_filename,  #content image filename
                    style_filename,    #style image filename
@@ -77,7 +118,7 @@ def transfer_style(content_filename,  #content image filename
                    beta=0,        #weight of tv loss
                    gamma=0,       #weight of clipping loss
                    lr=0.1,            #learning rate
-                   n_iters=1001,      #number of gradient ascent steps per octave
+                   n_iters=10,      #number of gradient ascent steps per octave
                    n_octave=4,        #number of times to process downsampled images
                    octave_scale=1.4,  #scale factor for each octave
                    detail_decay=1):   #scaler for previous octave's detail
