@@ -26,6 +26,47 @@ MAXS = ((1 - MEAN) / STD).unsqueeze(0).unsqueeze(-1).unsqueeze(-1).cuda()
 def main():
     manual_mode()
 
+def manual_mode():
+    ####################################################################################################################
+    #  *****update model name when swapping models to ensure image meta data is acccurate*****
+    model = models.vgg19(pretrained=True).to("cuda")
+    model.name="torchvision.models.vgg19"
+    ####################################################################################################################
+    print(model)
+   
+    #replace maxpooling layers with avgpool as per Gatys et al.
+    for idx in range(len(model.features)):
+        model.features[idx].requires_grad_(False)
+        if isinstance(model.features[idx], torch.nn.modules.pooling.MaxPool2d):
+            maxpool = model.features[idx]
+            model.features[idx] = torch.nn.AvgPool2d(kernel_size=maxpool.kernel_size,
+                                                     stride=maxpool.stride,
+                                                     padding=maxpool.padding,
+                                                     ceil_mode=maxpool.ceil_mode)
+
+    style_layers = [model.features[idx] for idx in [1, 3, 6, 8, 11, 13, 15, 17, 20, 22, 24, 26, 29, 31, 33, 35]]
+    #style_layers = [model.features[idx] for idx in [1, 6, 11, 20, 29]]
+    content_layer = model.features[22]
+  
+    content_filename = "5"
+    style_filename = "2"
+ 
+    for rotate in [True, False]:
+        transfer_style("content/%s.jpg" % content_filename, 
+                       "style/%s.jpg" % style_filename,
+                       "stylized/deep_gatys/%s_%s_tuning" % (content_filename, style_filename),
+                       model,
+                       content_layer,
+                       style_layers,
+                       alpha=1e-10,
+                       beta=1e-99,
+                       gamma=0,
+                       lr=0.01,
+                       n_iters=512,
+                       n_octave=2,
+                       octave_scale=2,
+                       rotate=rotate)
+
 def hyperparameter_sweep():
     ####################################################################################################################
     #  *****update model name when swapping models to ensure image meta data is acccurate*****
@@ -103,47 +144,6 @@ def hyperparameter_sweep():
                                content_layer,
                                style_layers,
                                octave_scale=octave_scale)
-
-def manual_mode():
-    ####################################################################################################################
-    #  *****update model name when swapping models to ensure image meta data is acccurate*****
-    model = models.vgg19(pretrained=True).to("cuda")
-    model.name="torchvision.models.vgg19"
-    ####################################################################################################################
-    print(model)
-   
-    #replace maxpooling layers with avgpool as per Gatys et al.
-    for idx in range(len(model.features)):
-        model.features[idx].requires_grad_(False)
-        if isinstance(model.features[idx], torch.nn.modules.pooling.MaxPool2d):
-            maxpool = model.features[idx]
-            model.features[idx] = torch.nn.AvgPool2d(kernel_size=maxpool.kernel_size,
-                                                     stride=maxpool.stride,
-                                                     padding=maxpool.padding,
-                                                     ceil_mode=maxpool.ceil_mode)
-
-    style_layers = [model.features[idx] for idx in [1, 6, 11, 20, 29]]
-    content_layer = model.features[36]
-  
-    content_filename = "5"
-    style_filename = "2"
- 
-    for rotate in [True, False]:
-        transfer_style("content/%s.jpg" % content_filename, 
-                       "style/%s.jpg" % style_filename,
-                       "stylized/deep_gatys/%s_%s_tuning" % (content_filename, style_filename),
-                       model,
-                       content_layer,
-                       style_layers,
-                       alpha=1e-8,
-                       beta=1e-99,
-                       gamma=0,
-                       lr=0.02,
-                       n_iters=256,
-                       n_octave=4,
-                       octave_scale=2,
-                       rotate=rotate)
-
 
 def transfer_style(content_filename,  #content image filename
                    style_filename,    #style image filename
