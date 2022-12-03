@@ -34,16 +34,17 @@ def main():
                                                      stride=maxpool.stride,
                                                      padding=maxpool.padding,
                                                      ceil_mode=maxpool.ceil_mode)
-
-    transfer_style("content_images/cat.jpg", 
-                   "style_images/painting3.jpg",
-                   "stylized_images/cat_bricks_deep",
+    content_filename = "cat"
+    style_filename = "swirl"
+    transfer_style("content/%s.jpg" % content_filename, 
+                   "style/%s.jpg" % style_filename,
+                   "stylized/deep_gatys/%s_%s" % (content_filename, style_filename),
                    model,
                    content_layer,
                    style_layers,
-                   1e-11,
-                   lr=0.15,
-                   n_iters=100,
+                   1e-9,
+                   lr=0.1,
+                   n_iters=20,
                    n_octave=4,
                    detail_decay=1)
 
@@ -92,7 +93,7 @@ def transfer_style(content_filename,  #content image filename
     detail = torch.zeros_like(content_octaves[-1]).cuda()
 
     #iterate through images from lowest to highest resolution
-    for content_octave, style_octave in zip(content_octaves[::-1], style_octaves[::-1]):
+    for octave_idx, (content_octave, style_octave) in enumerate(zip(content_octaves[::-1], style_octaves[::-1])):
 
         #upsample lower-res detail of previous iteration to shape of current octave
         detail = interpolate(detail, size=content_octave.shape[-2:], align_corners=True, mode="bilinear")        
@@ -139,15 +140,15 @@ def transfer_style(content_filename,  #content image filename
             if idx  % 100 == 0:
                 deprocess(img.clone().cpu()).save("%s_%d.jpg" % (out_filename, idx))
                 hyperparameters = "deep_gatys_style, content_filename=%s, style_filename=%s, model=%s, alpha=%s, lr=%s, n_iters=%d, n_octave=%d, octave_scale=%s, detail_decay=%s, iter=%d" % (content_filename, style_filename, model.name, str(alpha), lr, n_iters, n_octave, octave_scale, detail_decay, idx)
-                system("exiftool -ImageDescription='%s' '%s_%d.jpg'" % (hyperparameters, out_filename, idx)) 
+                system("exiftool -overwrite_original -ImageDescription='%s' '%s_%d.jpg'" % (hyperparameters, out_filename, idx)) 
 
         #separate accrued detail from the (possibly downsampled) base image
         detail = img - content_octave
 
         #save the image on each octave
-        deprocess(img.squeeze(0).clone().cpu()).save("%s.jpg" % out_filename)
+        deprocess(img.squeeze(0).clone().cpu()).save("%s_octave_%d.jpg" % (out_filename, octave_idx))
         hyperparameters = "deep_gatys_style, content_filename=%s, style_filename=%s, model=%s, alpha=%s, lr=%s, n_iters=%d, n_octave=%d, octave_scale=%s, detail_decay=%s, iter=%d" % (content_filename, style_filename, model.name, str(alpha), lr, n_iters, n_octave, octave_scale, detail_decay, idx)
-        system("exiftool -ImageDescription='%s' '%s.jpg'" % (hyperparameters, out_filename)) 
+        system("exiftool -overwrite_original -ImageDescription='%s' '%s_octave_%d.jpg'" % (hyperparameters, out_filename, octave_idx)) 
 
 
 
