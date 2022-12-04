@@ -162,7 +162,7 @@ def transfer_style(content_filename,   #content image filename
             img = img.rot90(k=int(rotate), dims=(2, 3)).detach().requires_grad_(True)
 
             #initialize a new optimizer for the rotated image
-            optimizer = torch.optim.Adam([img], betas=(0.0, 0.0), weight_decay=0, lr=learning_rate)
+            optimizer = torch.optim.Adam([img], lr=learning_rate)
 
             #clear model gradients
             model.zero_grad()
@@ -258,7 +258,7 @@ def get_rotated_style_activations(model, style_octave, rotate):
     style_grams_list = []
 
     for _ in range(4):
-        style_octave = style_octave.rot90(k=-int(rotate), dims=(2, 3))
+        style_octave = style_octave.rot90(k=int(rotate), dims=(2, 3))
         model.forward(style_octave)
         style_grams_list.append(get_style_activation(model))
 
