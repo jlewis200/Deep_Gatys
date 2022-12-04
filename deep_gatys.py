@@ -49,9 +49,6 @@ def main():
 
     #load pre-trained model, place in eval mode
     model = models.vgg19(weights=models.VGG19_Weights.IMAGENET1K_V1)
-    #import code
-    #code.interact(local=locals())
-
 
     if torch.cuda.is_available():
         model = model.cuda()
