@@ -354,11 +354,11 @@ def tv_loss(activations):
 
     #form a flattened vector containing all rows except final and from that subtract
     #a flattened vector containing all rows except first (across all channels)
-    loss += (activations[0, :, 1:].flatten() - activations[0, :, :-1].flatten()).square().sum()
+    loss = loss + (activations[0, :, 1:].flatten() - activations[0, :, :-1].flatten()).square().sum()
 
     #form a flattened vector containing all cols except final and from that subtract
     #a flattened vector containing all cols except first (across all channels)
-    loss += (activations[0,:, :, 1:].flatten() - activations[0, :, :, :-1].flatten()).square().sum()
+    loss = loss + (activations[0,:, :, 1:].flatten() - activations[0, :, :, :-1].flatten()).square().sum()
 
     return loss
 
@@ -380,7 +380,7 @@ def style_loss(generated_activations, style_activations):
     for generated_activation, style_activation in zip(generated_activations, style_activations):
         layer_scaler = layer_weight / (4 * generated_activation.numel()**2)
         gram_diff = gram_matrix(generated_activation) - gram_matrix(style_activation)
-        loss += gram_diff.square().sum().mul(layer_scaler)
+        loss = loss + gram_diff.square().sum().mul(layer_scaler)
 
     return loss
 
